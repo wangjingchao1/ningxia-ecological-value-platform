@@ -1,0 +1,125 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.18218368933047,
+          35.91331712468492
+        ]
+      },
+      "properties": {
+        "OBJECTID": 1,
+        "FID_Export": 0,
+        "LAYER": "Unknown Area Type",
+        "name": "宁夏回族自治区",
+        "gb": 156640000,
+        "FID_中国": 167,
+        "LAYER_1": "Unknown Area Type",
+        "name_1": "固原市",
+        "gb_1": 156640400,
+        "Shape_Leng": 7.33641842807,
+        "Shape_Area": 1.05349941859,
+        "ORIG_FID": 0
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          105.50221547175784,
+          37.01860306275133
+        ]
+      },
+      "properties": {
+        "OBJECTID": 2,
+        "FID_Export": 0,
+        "LAYER": "Unknown Area Type",
+        "name": "宁夏回族自治区",
+        "gb": 156640000,
+        "FID_中国": 199,
+        "LAYER_1": "Unknown Area Type",
+        "name_1": "中卫市",
+        "gb_1": 156640500,
+        "Shape_Leng": 10.1744063845,
+        "Shape_Area": 1.3932277465,
+        "ORIG_FID": 1
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.51335829276917,
+          39.00685153074805
+        ]
+      },
+      "properties": {
+        "OBJECTID": 3,
+        "FID_Export": 0,
+        "LAYER": "Unknown Area Type",
+        "name": "宁夏回族自治区",
+        "gb": 156640000,
+        "FID_中国": 224,
+        "LAYER_1": "Unknown Area Type",
+        "name_1": "石嘴山市",
+        "gb_1": 156640200,
+        "Shape_Leng": 3.20669631662,
+        "Shape_Area": 0.423791134583,
+        "ORIG_FID": 2
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.5296588527111,
+          37.46141748248306
+        ]
+      },
+      "properties": {
+        "OBJECTID": 4,
+        "FID_Export": 0,
+        "LAYER": "Unknown Area Type",
+        "name": "宁夏回族自治区",
+        "gb": 156640000,
+        "FID_中国": 246,
+        "LAYER_1": "Unknown Area Type",
+        "name_1": "吴忠市",
+        "gb_1": 156640300,
+        "Shape_Leng": 11.9931419936,
+        "Shape_Area": 1.69442373594,
+        "ORIG_FID": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.34475822532093,
+          38.280676880369555
+        ]
+      },
+      "properties": {
+        "OBJECTID": 5,
+        "FID_Export": 0,
+        "LAYER": "Unknown Area Type",
+        "name": "宁夏回族自治区",
+        "gb": 156640000,
+        "FID_中国": 298,
+        "LAYER_1": "Unknown Area Type",
+        "name_1": "银川市",
+        "gb_1": 156640100,
+        "Shape_Leng": 5.0096118789,
+        "Shape_Area": 0.716689304971,
+        "ORIG_FID": 4
+      }
+    }
+  ]
+}
