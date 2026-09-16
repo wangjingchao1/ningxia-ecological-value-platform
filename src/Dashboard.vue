@@ -65,7 +65,7 @@ const applyGlobeEffect = (instance) => {
 }
 
 const cacheRoadLayers = () => {
-  if (!map.value) return
+  if (!map.value || !map.value.isStyleLoaded()) return
   const style = map.value.getStyle()
   if (!style || !style.layers) return
   targetRoadLayers = style.layers
@@ -81,7 +81,13 @@ const cacheRoadLayers = () => {
 
 const add3dBuildingLayer = () => {
   const instance = map.value
-  if (!instance) return
+  if (!instance || !instance.isStyleLoaded()) return
+  
+  // 严格检查 composite 源是否存在，防止触发 source "composite" not found 报错
+  if (!instance.getSource('composite')) {
+    return
+  }
+
   if (instance.getLayer('3d-buildings')) {
     instance.removeLayer('3d-buildings')
   }
@@ -111,6 +117,7 @@ const addNingxiaBoundaryLayer = () => {
   if (!instance) return
 
   const executeAddBoundary = () => {
+    if (!instance.isStyleLoaded()) return
     if (instance.getSource('nx-boundary-source')) {
       if (instance.getLayer('nx-boundary-line')) instance.removeLayer('nx-boundary-line')
       if (instance.getLayer('nx-boundary-fill')) instance.removeLayer('nx-boundary-fill')
@@ -160,7 +167,7 @@ const addNingxiaBoundaryLayer = () => {
 }
 
 const restoreOriginalRoadStyles = () => {
-  if (!map.value || !targetRoadLayers.length) return
+  if (!map.value || !map.value.isStyleLoaded() || !targetRoadLayers.length) return
   targetRoadLayers.forEach(id => {
     const style = originalRoadStyles[id]
     if (style && map.value.getLayer(id)) {
@@ -261,6 +268,7 @@ const initMap = () => {
     emit('update:draw', drawInstance)
 
     instance.on('move', () => {
+      if (!map.value) return
       emit('update:mapStatus', {
         lng: instance.getCenter().lng.toFixed(4),
         lat: instance.getCenter().lat.toFixed(4),
@@ -269,6 +277,7 @@ const initMap = () => {
     })
 
     instance.on('moveend', () => {
+      if (!map.value) return
       const center = instance.getCenter()
       const viewData = {
         center: [center.lng, center.lat],
@@ -300,7 +309,7 @@ const initMap = () => {
       })
 
       setTimeout(() => {
-        instance.resize()
+        if (map.value) instance.resize()
       }, 100)
 
       instance.on('style.load', () => {

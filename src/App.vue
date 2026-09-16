@@ -1,161 +1,371 @@
 <template>
   <div class="map-wrapper">
+    <!-- 欢迎页：默认首先展示，所有按键绑定触发登录逻辑 -->
     <transition name="slide-up">
       <LandingPage
         v-if="showLanding"
-        @enter="handleEnterLanding"
+        @enter="handleLandingAction"
+        @go-login="handleLandingAction"
       />
     </transition>
 
-    <div class="top-bar">
-      <h1>宁夏生态产品价值核算智慧决策平台</h1>
-      <div class="system-title top-time">{{ currentTime }}</div>
-      <p class="subtitle"></p>
-    </div>
+    <!-- 登录界面：由欢迎页按键触发弹出 -->
+    <Login 
+      v-if="showLoginModal" 
+      @login-success="handleLoginSuccess" 
+      @close="showLoginModal = false"
+    />
 
-    <!-- 加载中遮罩提示 -->
-    <div v-if="isLoading" class="loading-mask">
-      <div class="loading-box">
-        <div class="spinner"></div>
-        <span>{{ loadingText }}</span>
+    <!-- 管理员身份登录成功后的界面 -->
+    <template v-if="isLoggedIn && userRole === 'admin'">
+      <!-- 情况 A：管理员默认进入后台管理面板（含用户删除、访问统计、生态数据只读、图层管理及进入大屏按钮） -->
+      <AdminDashboard 
+        v-if="adminView === 'backend'"
+        @logout="handleLogout" 
+        @open-big-screen="adminView = 'bigScreen'"
+      />
+
+      <!-- 情况 B：管理员点击“进入大屏”后，展示带全屏地图的大屏驾驶舱界面 -->
+      <template v-if="adminView === 'bigScreen'">
+        <!-- 管理员大屏顶部悬浮返回后台按钮 -->
+        <div class="admin-big-screen-bar">
+          <button class="back-admin-btn" @click="handleBackToBackend">
+            ⬅️ 返回管理员后台
+          </button>
+          
+        </div>
+
+        <div class="top-bar">
+          <h1>宁夏生态产品价值核算智慧决策平台</h1>
+          <div class="system-title top-time">
+            {{ currentTime }} 
+          </div>
+          <p class="subtitle"></p>
+        </div>
+
+        <!-- 加载中遮罩提示 -->
+        <div v-if="isLoading" class="loading-mask">
+          <div class="loading-box">
+            <div class="spinner"></div>
+            <span>{{ loadingText }}</span>
+          </div>
+        </div>
+
+        <!-- 右侧纯空间量测面板 -->
+        <MeasureToolbar
+          ref="measureToolbarRef"
+          v-if="map && draw"
+          :map="map"
+          :draw="draw"
+          :isOpen="activePanel === 'measure'"
+          @close="activePanel = null"
+        />
+
+        <!-- 左侧竖向菜单 -->
+        <div class="left-sidebar-menu">
+          <!-- 状态 A：常规菜单 -->
+          <div class="menu-items-container" v-show="!isCollapsed && !showWorkflowModels">
+            <div class="menu-item" @click="togglePanel('basemap')" :class="{ active: activePanel === 'basemap' }">
+              <div class="menu-btn">🗺</div>
+              <span class="menu-text">底图</span>
+            </div>
+
+            <div class="menu-item" @click="togglePanel('data')" :class="{ active: activePanel === 'data' }">
+              <div class="menu-btn">📊</div>
+              <span class="menu-text">基础数据可视化</span>
+            </div>
+
+            <div class="menu-item" @click="resetView">
+              <div class="menu-btn">●</div>
+              <span class="menu-text">复位</span>
+            </div>
+
+            <div class="menu-item" @click="toggle3D" :class="{ active: is3D }">
+              <div class="menu-btn">🔹</div>
+              <span class="menu-text">成果展示</span>
+            </div>
+
+            <div class="menu-item" @click="handleWorkflowClick" :class="{ active: activePanel === 'measure' }">
+              <div class="menu-btn">▲</div>
+              <span class="menu-text">工作流</span>
+            </div>
+
+            <div class="menu-item" @click="togglePanel('navigation')" :class="{ active: activePanel === 'navigation' }">
+              <div class="menu-btn">📡</div>
+              <span class="menu-text">决策问询</span>
+            </div>
+
+            <div class="menu-item" @click="togglePanel('grain')" :class="{ active: activePanel === 'grain' }">
+              <div class="menu-btn">♾️</div>
+              <span class="menu-text">全区统计</span>
+            </div>
+
+            <!-- 退出登录按钮 -->
+            <div class="menu-item" @click="handleLogout" title="退出系统">
+              <div class="menu-btn danger-text" style="background: rgba(239, 68, 68, 0.2); border-color: #ef4444;">🚪</div>
+              <span class="menu-text danger-text">退出</span>
+            </div>
+          </div>
+
+          <!-- 状态 B：生态模型 4 个按钮 -->
+          <div class="menu-items-container" v-show="!isCollapsed && showWorkflowModels">
+            <div class="menu-item" title="年产水量模型" @click="handleModelCalculate('WaterYield', '年产水量')">
+              <div class="menu-btn model-icon">💧</div>
+              <span class="menu-text">年产水量</span>
+            </div>
+
+            <div class="menu-item" title="土壤保持模型" @click="handleModelCalculate('SoilConservation', '土壤保持')">
+              <div class="menu-btn model-icon">🌱</div>
+              <span class="menu-text">土壤保持</span>
+            </div>
+
+            <div class="menu-item" title="碳储量模型" @click="handleModelCalculate('CarbonStorage', '碳储量')">
+              <div class="menu-btn model-icon">🌳</div>
+              <span class="menu-text">碳储量</span>
+            </div>
+
+            <div class="menu-item" title="生境质量模型" @click="handleModelCalculate('HabitatQuality', '生境质量')">
+              <div class="menu-btn model-icon">🧬</div>
+              <span class="menu-text">生境质量</span>
+            </div>
+
+            <div class="menu-item collapse-btn-wrap" @click="handleWorkflowReturn" title="返回常规菜单">
+              <div class="menu-btn collapse-icon">↩</div>
+              <span class="menu-text danger-text">返回</span>
+            </div>
+          </div>
+
+          <div class="menu-item collapse-btn-wrap" @click="toggleCollapse" :title="isCollapsed ? '点击展开菜单' : '点击收起菜单'">
+            <div class="menu-btn collapse-icon">{{ isCollapsed ? '▼' : '▲' }}</div>
+            <span class="menu-text">{{ isCollapsed ? '展开' : '收起' }}</span>
+          </div>
+        </div>
+
+        <!-- 状态栏在中下部分 -->
+        <div class="bottom-status">
+          <span>LNG: {{ mapStatus.lng }}</span>
+          <span>LAT: {{ mapStatus.lat }}</span>
+          <span>ZOOM: {{ mapStatus.zoom }}</span>
+        </div>
+
+        <!-- 关联 Dashboard 逻辑组件 -->
+        <Dashboard
+          ref="dashboardRef"
+          :activePanel="activePanel"
+          :is3D="is3D"
+          @update:map="handleMapUpdate"
+          @update:draw="draw = $event"
+          @update:mapStatus="Object.assign(mapStatus, $event)"
+          @update:currentTime="currentTime = $event"
+          @update:is3D="is3D = $event"
+          @update:activePanel="activePanel = $event"
+        />
+
+        <BasemapPanel
+          v-if="map"
+          :map="map"
+          :isOpen="activePanel === 'basemap'"
+          @close="activePanel = null"
+          @basemap-changed="handleBasemapChange"
+        />
+
+        <DataMapLayer
+          v-if="map"
+          :map="map"
+          :isOpen="activePanel === 'data'"
+          @close="activePanel = null"
+        />
+
+        <NavigationPanel
+          v-if="map && activePanel === 'navigation'"
+          :map="map"
+          :isOpen="true"
+          @close="activePanel = null"
+        />
+
+        <GrainYield
+          v-if="map && activePanel === 'grain'"
+          :map="map"
+          :isOpen="true"
+          @close="activePanel = null"
+        />
+      </template>
+    </template>
+
+    <!-- 普通用户身份登录成功后的全屏/浮窗交互界面 -->
+    <template v-if="isLoggedIn && userRole === 'user'">
+      <!-- 右上角悬浮的账户按钮，点击呼出账户明细面板 -->
+      <div class="user-top-bar-trigger">
+        <div class="user-avatar-trigger" @click="showUserProfile = true">
+          <span class="avatar-icon">👤</span>
+          <span class="uname">{{ loggedUsername || '普通用户' }}</span>
+          <span class="role-tag">标准用户</span>
+        </div>
       </div>
-    </div>
 
-    <!-- 右侧纯空间量测面板 (绑定 ref 用于获取当前空间几何范围) -->
-    <MeasureToolbar
-      ref="measureToolbarRef"
-      v-if="map && draw"
-      :map="map"
-      :draw="draw"
-      :isOpen="activePanel === 'measure'"
-      @close="activePanel = null"
-    />
+      <!-- 用户端账户明细弹窗 -->
+      <UserProfileModal 
+        v-if="showUserProfile"
+        :userInfo="{ username: loggedUsername || '普通用户', userType: '标准生态决策用户' }"
+        @close="showUserProfile = false"
+        @logout="handleLogout"
+      />
 
-    <!-- 左侧竖向菜单：未点工作流时显示常规菜单，点工作流后在原位置替换显示生态模型菜单 -->
-    <div class="left-sidebar-menu">
-      <!-- 状态 A：常规菜单 -->
-      <div class="menu-items-container" v-show="!isCollapsed && !showWorkflowModels">
-        <div class="menu-item" @click="togglePanel('basemap')" :class="{ active: activePanel === 'basemap' }">
-          <div class="menu-btn">🗺</div>
-          <span class="menu-text">底图</span>
+      <div class="top-bar">
+        <h1>宁夏生态产品价值核算智慧决策平台</h1>
+        <div class="system-title top-time">
+          {{ currentTime }} 
         </div>
+        <p class="subtitle"></p>
+      </div>
 
-        <div class="menu-item" @click="togglePanel('data')" :class="{ active: activePanel === 'data' }">
-          <div class="menu-btn">📊</div>
-          <span class="menu-text">基础数据可视化</span>
-        </div>
-
-        <div class="menu-item" @click="resetView">
-          <div class="menu-btn">●</div>
-          <span class="menu-text">复位</span>
-        </div>
-
-        <div class="menu-item" @click="toggle3D" :class="{ active: is3D }">
-          <div class="menu-btn">🔹</div>
-          <span class="menu-text">成果展示</span>
-        </div>
-
-        <!-- 点击“工作流”：既打开右侧量测框，又把左侧菜单原地替换为生态模型按钮 -->
-        <div class="menu-item" @click="handleWorkflowClick" :class="{ active: activePanel === 'measure' }">
-          <div class="menu-btn">▲</div>
-          <span class="menu-text">工作流</span>
-        </div>
-
-        <div class="menu-item" @click="togglePanel('navigation')" :class="{ active: activePanel === 'navigation' }">
-          <div class="menu-btn">📡</div>
-          <span class="menu-text">决策问询</span>
-        </div>
-
-        <div class="menu-item" @click="togglePanel('grain')" :class="{ active: activePanel === 'grain' }">
-          <div class="menu-btn">♾️</div>
-          <span class="menu-text">全区统计</span>
+      <!-- 加载中遮罩提示 -->
+      <div v-if="isLoading" class="loading-mask">
+        <div class="loading-box">
+          <div class="spinner"></div>
+          <span>{{ loadingText }}</span>
         </div>
       </div>
 
-      <!-- 状态 B：点击“工作流”后在原位置替换显示的生态模型 4 个按钮 + 返回键 -->
-      <div class="menu-items-container" v-show="!isCollapsed && showWorkflowModels">
-        <div class="menu-item" title="年产水量模型" @click="handleModelCalculate('WaterYield', '年产水量')">
-          <div class="menu-btn model-icon">💧</div>
-          <span class="menu-text">年产水量</span>
+      <!-- 右侧纯空间量测面板 -->
+      <MeasureToolbar
+        ref="measureToolbarRef"
+        v-if="map && draw"
+        :map="map"
+        :draw="draw"
+        :isOpen="activePanel === 'measure'"
+        @close="activePanel = null"
+      />
+
+      <!-- 左侧竖向菜单 -->
+      <div class="left-sidebar-menu">
+        <!-- 状态 A：常规菜单 -->
+        <div class="menu-items-container" v-show="!isCollapsed && !showWorkflowModels">
+          <div class="menu-item" @click="togglePanel('basemap')" :class="{ active: activePanel === 'basemap' }">
+            <div class="menu-btn">🗺</div>
+            <span class="menu-text">底图</span>
+          </div>
+
+          <div class="menu-item" @click="togglePanel('data')" :class="{ active: activePanel === 'data' }">
+            <div class="menu-btn">📊</div>
+            <span class="menu-text">基础数据可视化</span>
+          </div>
+
+          <div class="menu-item" @click="resetView">
+            <div class="menu-btn">●</div>
+            <span class="menu-text">复位</span>
+          </div>
+
+          <div class="menu-item" @click="toggle3D" :class="{ active: is3D }">
+            <div class="menu-btn">🔹</div>
+            <span class="menu-text">成果展示</span>
+          </div>
+
+          <div class="menu-item" @click="handleWorkflowClick" :class="{ active: activePanel === 'measure' }">
+            <div class="menu-btn">▲</div>
+            <span class="menu-text">工作流</span>
+          </div>
+
+          <div class="menu-item" @click="togglePanel('navigation')" :class="{ active: activePanel === 'navigation' }">
+            <div class="menu-btn">📡</div>
+            <span class="menu-text">决策问询</span>
+          </div>
+
+          <div class="menu-item" @click="togglePanel('grain')" :class="{ active: activePanel === 'grain' }">
+            <div class="menu-btn">♾️</div>
+            <span class="menu-text">全区统计</span>
+          </div>
+
+          <!-- 退出登录按钮 -->
+          <div class="menu-item" @click="handleLogout" title="退出系统">
+            <div class="menu-btn danger-text" style="background: rgba(239, 68, 68, 0.2); border-color: #ef4444;">🚪</div>
+            <span class="menu-text danger-text">退出</span>
+          </div>
         </div>
 
-        <div class="menu-item" title="土壤保持模型" @click="handleModelCalculate('SoilConservation', '土壤保持')">
-          <div class="menu-btn model-icon">🌱</div>
-          <span class="menu-text">土壤保持</span>
+        <!-- 状态 B：生态模型 4 个按钮 -->
+        <div class="menu-items-container" v-show="!isCollapsed && showWorkflowModels">
+          <div class="menu-item" title="年产水量模型" @click="handleModelCalculate('WaterYield', '年产水量')">
+            <div class="menu-btn model-icon">💧</div>
+            <span class="menu-text">年产水量</span>
+          </div>
+
+          <div class="menu-item" title="土壤保持模型" @click="handleModelCalculate('SoilConservation', '土壤保持')">
+            <div class="menu-btn model-icon">🌱</div>
+            <span class="menu-text">土壤保持</span>
+          </div>
+
+          <div class="menu-item" title="碳储量模型" @click="handleModelCalculate('CarbonStorage', '碳储量')">
+            <div class="menu-btn model-icon">🌳</div>
+            <span class="menu-text">碳储量</span>
+          </div>
+
+          <div class="menu-item" title="生境质量模型" @click="handleModelCalculate('HabitatQuality', '生境质量')">
+            <div class="menu-btn model-icon">🧬</div>
+            <span class="menu-text">生境质量</span>
+          </div>
+
+          <div class="menu-item collapse-btn-wrap" @click="handleWorkflowReturn" title="返回常规菜单">
+            <div class="menu-btn collapse-icon">↩</div>
+            <span class="menu-text danger-text">返回</span>
+          </div>
         </div>
 
-        <div class="menu-item" title="碳储量模型" @click="handleModelCalculate('CarbonStorage', '碳储量')">
-          <div class="menu-btn model-icon">🌳</div>
-          <span class="menu-text">碳储量</span>
-        </div>
-
-        <div class="menu-item" title="生境质量模型" @click="handleModelCalculate('HabitatQuality', '生境质量')">
-          <div class="menu-btn model-icon">🧬</div>
-          <span class="menu-text">生境质量</span>
-        </div>
-
-        <!-- 返回键：点击后切回左侧常规菜单，并关闭右侧量测框 -->
-        <div class="menu-item collapse-btn-wrap" @click="handleWorkflowReturn" title="返回常规菜单">
-          <div class="menu-btn collapse-icon">↩</div>
-          <span class="menu-text danger-text">返回</span>
+        <div class="menu-item collapse-btn-wrap" @click="toggleCollapse" :title="isCollapsed ? '点击展开菜单' : '点击收起菜单'">
+          <div class="menu-btn collapse-icon">{{ isCollapsed ? '▼' : '▲' }}</div>
+          <span class="menu-text">{{ isCollapsed ? '展开' : '收起' }}</span>
         </div>
       </div>
 
-      <!-- 最底下的收起/展开键 -->
-      <div class="menu-item collapse-btn-wrap" @click="toggleCollapse" :title="isCollapsed ? '点击展开菜单' : '点击收起菜单'">
-        <div class="menu-btn collapse-icon">{{ isCollapsed ? '▼' : '▲' }}</div>
-        <span class="menu-text">{{ isCollapsed ? '展开' : '收起' }}</span>
+      <!-- 状态栏在中下部分 -->
+      <div class="bottom-status">
+        <span>LNG: {{ mapStatus.lng }}</span>
+        <span>LAT: {{ mapStatus.lat }}</span>
+        <span>ZOOM: {{ mapStatus.zoom }}</span>
       </div>
-    </div>
 
-    <!-- 状态栏在中下部分 -->
-    <div class="bottom-status">
-      <span>LNG: {{ mapStatus.lng }}</span>
-      <span>LAT: {{ mapStatus.lat }}</span>
-      <span>ZOOM: {{ mapStatus.zoom }}</span>
-    </div>
+      <!-- 关联 Dashboard 逻辑组件 -->
+      <Dashboard
+        ref="dashboardRef"
+        :activePanel="activePanel"
+        :is3D="is3D"
+        @update:map="handleMapUpdate"
+        @update:draw="draw = $event"
+        @update:mapStatus="Object.assign(mapStatus, $event)"
+        @update:currentTime="currentTime = $event"
+        @update:is3D="is3D = $event"
+        @update:activePanel="activePanel = $event"
+      />
 
-    <!-- 关联 Dashboard 逻辑组件 -->
-    <Dashboard
-      ref="dashboardRef"
-      :activePanel="activePanel"
-      :is3D="is3D"
-      @update:map="handleMapUpdate"
-      @update:draw="draw = $event"
-      @update:mapStatus="Object.assign(mapStatus, $event)"
-      @update:currentTime="currentTime = $event"
-      @update:is3D="is3D = $event"
-      @update:activePanel="activePanel = $event"
-    />
+      <BasemapPanel
+        v-if="map"
+        :map="map"
+        :isOpen="activePanel === 'basemap'"
+        @close="activePanel = null"
+        @basemap-changed="handleBasemapChange"
+      />
 
-    <BasemapPanel
-      v-if="map"
-      :map="map"
-      :isOpen="activePanel === 'basemap'"
-      @close="activePanel = null"
-      @basemap-changed="handleBasemapChange"
-    />
+      <DataMapLayer
+        v-if="map"
+        :map="map"
+        :isOpen="activePanel === 'data'"
+        @close="activePanel = null"
+      />
 
-    <DataMapLayer
-      v-if="map"
-      :map="map"
-      :isOpen="activePanel === 'data'"
-      @close="activePanel = null"
-    />
+      <NavigationPanel
+        v-if="map && activePanel === 'navigation'"
+        :map="map"
+        :isOpen="true"
+        @close="activePanel = null"
+      />
 
-    <NavigationPanel
-      v-if="map && activePanel === 'navigation'"
-      :map="map"
-      :isOpen="true"
-      @close="activePanel = null"
-    />
-
-    <GrainYield
-      v-if="map && activePanel === 'grain'"
-      :map="map"
-      :isOpen="true"
-      @close="activePanel = null"
-    />
+      <GrainYield
+        v-if="map && activePanel === 'grain'"
+        :map="map"
+        :isOpen="true"
+        @close="activePanel = null"
+      />
+    </template>
 
     <!-- 地图真实挂载容器 -->
     <div ref="mapContainer" id="map"></div>
@@ -163,9 +373,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, provide, onMounted, nextTick } from 'vue'
+import { ref, reactive, provide, onMounted, onUnmounted, nextTick } from 'vue'
 
 import LandingPage from './components/LandingPage.vue'
+import Login from './components/Login.vue' 
+import AdminDashboard from './AdminDashboard.vue'
+import UserProfileModal from './UserProfileModal.vue'
 import BasemapPanel from './components/BasemapPanel.vue'
 import MeasureToolbar from './components/Measurement.vue'
 import NavigationPanel from './components/NavigationPanel.vue'
@@ -176,7 +389,16 @@ import Dashboard from './Dashboard.vue'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css'
 
-const showLanding = ref(true)
+// 权限及页面控制状态
+const isLoggedIn = ref(false)
+const userRole = ref('user') 
+const loggedUsername = ref('')
+const showUserProfile = ref(false)
+const adminView = ref('backend') // 管理员视图控制：'backend' 表示后台管理面板，'bigScreen' 表示大屏地图端
+
+const showLanding = ref(true) 
+const showLoginModal = ref(false) 
+
 const mapContainer = ref(null)
 const map = ref(null)
 const draw = ref(null)
@@ -185,11 +407,8 @@ const is3D = ref(true)
 const isCollapsed = ref(false)
 const showWorkflowModels = ref(false) 
 
-// 加载状态相关
 const isLoading = ref(false)
 const loadingText = ref('')
-
-// 绑定右侧 Measurement 组件的 ref
 const measureToolbarRef = ref(null)
 
 const mapStatus = reactive({
@@ -200,10 +419,63 @@ const mapStatus = reactive({
 const currentTime = ref('')
 const dashboardRef = ref(null)
 
-// 通过 provide 将地图真实容器传给 Dashboard
 provide('mapContainer', mapContainer)
 
-// 加载并确保点位图层置于最上层
+const handleLandingAction = () => {
+  showLoginModal.value = true
+}
+
+const handleLoginSuccess = (role, username) => {
+  isLoggedIn.value = true
+  userRole.value = role || 'user'
+  loggedUsername.value = username || '用户'
+  
+  showLoginModal.value = false
+  showLanding.value = false 
+  adminView.value = 'backend' // 登录后管理员默认进入后台
+
+  if (userRole.value === 'user' || userRole.value === 'admin') {
+    nextTick(() => {
+      if (map.value) {
+        map.value.resize()
+        setTimeout(() => {
+          map.value.triggerRepaint()
+          addNxdLayer()
+        }, 300)
+      }
+    })
+  }
+}
+
+const handleLogout = () => {
+  isLoggedIn.value = false
+  userRole.value = 'user'
+  loggedUsername.value = ''
+  showUserProfile.value = false
+  showLanding.value = true
+  showLoginModal.value = false
+  adminView.value = 'backend'
+  localStorage.removeItem('token')
+}
+
+// 新增：从大屏安全返回管理员后台的方法（解决后台重新挂载后点击事件失效及地图尺寸错乱问题）
+const handleBackToBackend = () => {
+  adminView.value = 'backend'
+  activePanel.value = null
+  nextTick(() => {
+    if (map.value) {
+      map.value.resize()
+      setTimeout(() => {
+        map.value.triggerRepaint()
+      }, 200)
+    }
+  })
+}
+
+onUnmounted(() => {
+  handleLogout()
+})
+
 const addNxdLayer = async () => {
   if (!map.value) return
   const instance = map.value
@@ -298,19 +570,6 @@ const handleMapUpdate = (instance) => {
   }
 }
 
-const handleEnterLanding = () => {
-  showLanding.value = false
-  nextTick(() => {
-    if (map.value) {
-      map.value.resize()
-      setTimeout(() => {
-        map.value.triggerRepaint()
-        addNxdLayer()
-      }, 300)
-    }
-  })
-}
-
 onMounted(() => {
   nextTick(() => {
     const checkMapLoaded = setInterval(() => {
@@ -339,7 +598,6 @@ const handleWorkflowReturn = () => {
   activePanel.value = null 
 }
 
-// 保留模型计算的监听与几何检查入口（后续您可直接把外部子组件挂载进来或对接逻辑）
 const handleModelCalculate = async (modelType, modelName) => {
   if (!measureToolbarRef.value || typeof measureToolbarRef.value.getCurrentSelectedGeometry !== 'function') {
     alert('右侧量测面板尚未完全加载或展开，请先打开工作流与量测面板！')
@@ -353,7 +611,6 @@ const handleModelCalculate = async (modelType, modelName) => {
   }
 
   if (isLoading.value) return
-
   console.log(`触发模型计算监听 [${modelType}] (${modelName})，几何范围就绪。`, currentGeometry)
 }
 
@@ -381,12 +638,89 @@ const toggleCollapse = () => {
 </script>
 
 <style scoped>
+/* 管理员在大屏模式下的悬浮返回条 */
+.admin-big-screen-bar {
+  position: fixed;
+  top: 15px;
+  left: 20px;
+  z-index: 25000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.back-admin-btn {
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  color: #fff;
+  border: 1px solid rgba(0, 200, 255, 0.5);
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: bold;
+  box-shadow: 0 0 10px rgba(0, 150, 255, 0.4);
+  transition: all 0.2s;
+}
+.back-admin-btn:hover {
+  background: linear-gradient(135deg, #0369a1, #075985);
+  box-shadow: 0 0 15px rgba(0, 200, 255, 0.7);
+}
+.big-screen-title {
+  color: #00ffff;
+  font-size: 14px;
+  font-weight: bold;
+  text-shadow: 0 0 8px rgba(0, 255, 255, 0.4);
+  background: rgba(15, 23, 42, 0.85);
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 200, 255, 0.3);
+}
+
+.user-top-bar-trigger {
+  position: fixed;
+  top: 20px;
+  right: 30px;
+  z-index: 25000;
+}
+
+.user-avatar-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(15, 25, 45, 0.9);
+  border: 1px solid rgba(0, 200, 255, 0.4);
+  padding: 6px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  box-shadow: 0 0 15px rgba(0, 150, 255, 0.3);
+  transition: all 0.2s;
+}
+.user-avatar-trigger:hover {
+  border-color: #00ffff;
+  background: rgba(0, 150, 255, 0.2);
+}
+
+.avatar-icon {
+  font-size: 14px;
+}
+
+.uname {
+  color: #fff;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.role-tag {
+  background: #0284c7;
+  color: white;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
 .loading-mask {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
   background: rgba(0, 0, 0, 0.4);
   z-index: 2000;
   display: flex;
@@ -410,8 +744,7 @@ const toggleCollapse = () => {
 }
 
 .spinner {
-  width: 32px;
-  height: 32px;
+  width: 32px; height: 32px;
   border: 3px solid rgba(0, 255, 255, 0.2);
   border-top-color: #00ffff;
   border-radius: 50%;
@@ -442,17 +775,14 @@ const toggleCollapse = () => {
 
 #map {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
   z-index: 1;
 }
 
 .top-bar {
   position: absolute;
-  top: 0;
-  left: 0;
+  top: 0; left: 0;
   width: 100%;
   text-align: center;
   color: white;
@@ -492,8 +822,7 @@ const toggleCollapse = () => {
 
 .left-sidebar-menu {
   position: absolute;
-  top: 100px;
-  left: 25px;
+  top: 100px; left: 25px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -524,8 +853,7 @@ const toggleCollapse = () => {
 }
 
 .menu-btn {
-  width: 44px;
-  height: 44px;
+  width: 44px; height: 44px;
   border-radius: 50%;
   background: rgba(10, 25, 50, 0.7);
   color: #00ffff;
@@ -573,8 +901,7 @@ const toggleCollapse = () => {
 
 .bottom-status {
   position: absolute;
-  bottom: 15px;
-  left: 50%;
+  bottom: 15px; left: 50%;
   transform: translateX(-50%);
   z-index: 1000;
   color: #00ffff;
